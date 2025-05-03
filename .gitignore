@@ -132,9 +132,14 @@ celerybeat.pid
 .venv
 env/
 venv/
+email/
 ENV/
 env.bak/
 venv.bak/
+
+# Credentials
+credentials.json
+token.json
 
 # Spyder project settings
 .spyderproject
