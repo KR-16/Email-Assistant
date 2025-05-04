@@ -150,29 +150,48 @@ def create_google_task(title, notes):
     return result
 
 class EmailProcessor:
+    """
+    Main orchestrator class that coordinates the entire email processing workflow.
+    Integrates Salesforce, Gmail, and ChatGPT functionality.
+    """
     def __init__(self):
+        """Initialize all required connectors and services."""
+        # Initialize Salesforce connector
         self.sf_connector = SalesforceConnector()
+        # Initialize Gmail connector
         self.gmail_connector = GmailConnector()
+        # Initialize ChatGPT processor
         self.chatgpt_processor = ChatGPTProcessor()
+        # Initialize database connection
         self.engine = init_db()
         self.Session = sessionmaker(bind=self.engine)
 
     def process_emails(self):
-        """Main method to process emails for all candidates."""
+        """
+        Main method to process emails for all candidates.
+        Orchestrates the entire workflow:
+        1. Authenticates with Gmail
+        2. Fetches candidates from Salesforce
+        3. Processes emails for each candidate
+        4. Categorizes emails using ChatGPT
+        5. Generates and stores responses
+        6. Updates email statistics
+        """
         try:
-            # Authenticate with Gmail
+            # Authenticate with Gmail API
             self.gmail_connector.authenticate()
             
-            # Get all candidate emails
+            # Get all candidate emails from database
             candidates = self.sf_connector.get_candidate_emails()
             
+            # Process emails for each candidate
             for email, salesforce_id in candidates:
                 print(f"Processing emails for candidate: {email}")
                 
-                # Get today's emails
+                # Get today's emails for the candidate
                 messages = self.gmail_connector.get_today_emails()
                 
-                # Initialize counters
+                # Initialize counters for email categories
                 category_counts = {
                     "Application": 0,
                     "Interview": 0,
@@ -181,6 +200,7 @@ class EmailProcessor:
                     "Other": 0
                 }
                 
+                # Process each email
                 for message in messages:
                     # Get email content
                     email_content = self.gmail_connector.get_email_content(message['id'])
@@ -188,13 +208,13 @@ class EmailProcessor:
                     if not email_content:
                         continue
                     
-                    # Categorize email
+                    # Categorize email using ChatGPT
                     category = self.chatgpt_processor.categorize_email(email_content)
                     
-                    # Apply label
+                    # Apply Gmail label
                     self.gmail_connector.apply_label(message['id'], category)
                     
-                    # Update counter
+                    # Update category counter
                     category_counts[category] += 1
                     
                     # Generate and store response if needed
@@ -211,17 +231,25 @@ class EmailProcessor:
                                 response_draft
                             )
                 
-                # Store email stats
+                # Store email statistics for the candidate
                 self._store_email_stats(salesforce_id, category_counts)
                 
         except Exception as e:
             print(f"Error processing emails: {str(e)}")
 
     def _store_email_stats(self, candidate_id, category_counts):
-        """Store email statistics in the database."""
+        """
+        Store email statistics in the database.
+        
+        Args:
+            candidate_id (int): ID of the candidate
+            category_counts (dict): Dictionary containing counts for each email category
+        """
         try:
+            # Create database session
             session = self.Session()
             
+            # Create new stats record
             stats = EmailStats(
                 candidate_id=candidate_id,
                 application_count=category_counts["Application"],
@@ -231,6 +259,7 @@ class EmailProcessor:
                 other_count=category_counts["Other"]
             )
             
+            # Save to database
             session.add(stats)
             session.commit()
             session.close()
@@ -239,5 +268,6 @@ class EmailProcessor:
             print(f"Error storing email stats: {str(e)}")
 
 if __name__ == "__main__":
+    # Create and run email processor
     processor = EmailProcessor()
     processor.process_emails()
