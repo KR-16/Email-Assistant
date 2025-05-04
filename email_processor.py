@@ -6,6 +6,16 @@ from sumy.summarizers.lsa import LsaSummarizer
 import re
 import nltk
 nltk.download('punkt_tab', quiet=True)  # Silent download (no prompts)
+from salesforce_integration import SalesforceConnector
+from gmail_integration import GmailConnector
+from chatgpt_integration import ChatGPTProcessor
+from models import EmailStats, init_db
+from sqlalchemy.orm import sessionmaker
+from datetime import datetime
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 CATEGORIES = {
     "Job Application": [
@@ -139,12 +149,95 @@ def create_google_task(title, notes):
 
     return result
 
-if __name__ == "__main__":
-    emails = process_emails()
-    for email in emails:
-        # print(f"Subject: {email['subject']}\nSummary: {email['summary']}\n")
-        task_title = f"Follow Up: {email['subject']}"
-        task_notes = f"Email Summary: \n{email['summary']}"
+class EmailProcessor:
+    def __init__(self):
+        self.sf_connector = SalesforceConnector()
+        self.gmail_connector = GmailConnector()
+        self.chatgpt_processor = ChatGPTProcessor()
+        self.engine = init_db()
+        self.Session = sessionmaker(bind=self.engine)
 
-        create_google_task(task_title, task_notes)
-        print(f"Task Created: {task_title}")
+    def process_emails(self):
+        """Main method to process emails for all candidates."""
+        try:
+            # Authenticate with Gmail
+            self.gmail_connector.authenticate()
+            
+            # Get all candidate emails
+            candidates = self.sf_connector.get_candidate_emails()
+            
+            for email, salesforce_id in candidates:
+                print(f"Processing emails for candidate: {email}")
+                
+                # Get today's emails
+                messages = self.gmail_connector.get_today_emails()
+                
+                # Initialize counters
+                category_counts = {
+                    "Application": 0,
+                    "Interview": 0,
+                    "Offer": 0,
+                    "Rejection": 0,
+                    "Other": 0
+                }
+                
+                for message in messages:
+                    # Get email content
+                    email_content = self.gmail_connector.get_email_content(message['id'])
+                    
+                    if not email_content:
+                        continue
+                    
+                    # Categorize email
+                    category = self.chatgpt_processor.categorize_email(email_content)
+                    
+                    # Apply label
+                    self.gmail_connector.apply_label(message['id'], category)
+                    
+                    # Update counter
+                    category_counts[category] += 1
+                    
+                    # Generate and store response if needed
+                    if category != "Other":
+                        response_draft = self.chatgpt_processor.generate_response(
+                            email_content, category
+                        )
+                        
+                        if response_draft:
+                            self.chatgpt_processor.store_response(
+                                salesforce_id,
+                                message['id'],
+                                category,
+                                response_draft
+                            )
+                
+                # Store email stats
+                self._store_email_stats(salesforce_id, category_counts)
+                
+        except Exception as e:
+            print(f"Error processing emails: {str(e)}")
+
+    def _store_email_stats(self, candidate_id, category_counts):
+        """Store email statistics in the database."""
+        try:
+            session = self.Session()
+            
+            stats = EmailStats(
+                candidate_id=candidate_id,
+                application_count=category_counts["Application"],
+                interview_count=category_counts["Interview"],
+                offer_count=category_counts["Offer"],
+                rejection_count=category_counts["Rejection"],
+                other_count=category_counts["Other"]
+            )
+            
+            session.add(stats)
+            session.commit()
+            session.close()
+            
+        except Exception as e:
+            print(f"Error storing email stats: {str(e)}")
+
+if __name__ == "__main__":
+    processor = EmailProcessor()
+    processor.process_emails()
