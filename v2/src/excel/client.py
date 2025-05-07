@@ -85,6 +85,7 @@ class ExcelClient:
             if not os.path.exists(self.excel_file_path):
                 self._create_excel_file()
             
+<<<<<<< Updated upstream
             # Load candidate data from Candidates sheet
             self.candidates_df = pd.read_excel(self.excel_file_path, sheet_name='Candidates')
             
@@ -101,6 +102,37 @@ class ExcelClient:
                     'Application', 'Interview', 'Offer', 'Rejection', 'Other',
                     'LastUpdated'
                 ])
+=======
+            # Load data from Excel sheets
+            try:
+                # Try to load the first sheet as Candidates
+                self.candidates_df = pd.read_excel(self.excel_file_path, sheet_name=0)
+                
+                # Verify if it has the required columns
+                required_columns = ['Name', 'candidateEmail__c', 'candidatePassword__c']
+                if not all(col in self.candidates_df.columns for col in required_columns):
+                    raise ValueError("First sheet does not have required candidate columns")
+                
+                # Initialize empty DataFrames for other sheets
+                self.email_records_df = pd.DataFrame(columns=[
+                    'Id', 'CandidateId', 'GmailMessageId', 'Subject', 'Sender',
+                    'Category', 'ReceivedAt', 'ProcessedAt', 'ResponseGenerated',
+                    'ResponseSent'
+                ])
+                
+                self.label_counts_df = pd.DataFrame(columns=[
+                    'Id', 'CandidateId', 'CandidateName', 'CandidateEmail',
+                    'Application', 'Interview', 'Offer', 'Rejection', 'Other',
+                    'LastUpdated'
+                ])
+                
+                # Save to create the new sheets
+                self.save_data()
+                
+            except Exception as e:
+                logger.error(f"Error loading Excel file: {str(e)}")
+                raise
+>>>>>>> Stashed changes
             
             logger.info(f"Successfully loaded data from {self.excel_file_path}")
         except Exception as e:
@@ -272,6 +304,32 @@ class ExcelClient:
             - Saves changes
         """
         try:
+<<<<<<< Updated upstream
+=======
+            # Convert timezone-aware datetime to timezone-naive
+            received_at = email_data['received_at']
+            if received_at.tzinfo is not None:
+                received_at = received_at.replace(tzinfo=None)
+            
+            new_record = {
+                'Id': len(self.email_records_df) + 1,
+                'CandidateId': candidate_id,
+                'GmailMessageId': email_data['id'],
+                'Subject': email_data['subject'],
+                'Sender': email_data['sender'],
+                'Category': email_data['category'],
+                'ReceivedAt': received_at,
+                'ProcessedAt': datetime.utcnow().replace(tzinfo=None),
+                'ResponseGenerated': email_data.get('response'),
+                'ResponseSent': bool(email_data.get('response'))
+            }
+            
+            self.email_records_df = pd.concat([
+                self.email_records_df,
+                pd.DataFrame([new_record])
+            ], ignore_index=True)
+            
+>>>>>>> Stashed changes
             # Update label counts
             self._update_label_count(candidate_id, email_data['category'])
             

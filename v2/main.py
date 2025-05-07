@@ -21,6 +21,7 @@ from datetime import datetime
 import sys
 import os
 from typing import Dict, List
+from email.utils import parsedate_to_datetime
 
 # Import custom modules
 from src.excel.client import ExcelClient
@@ -125,13 +126,20 @@ class EmailAssistant:
                     # Generate response if needed
                     response = self.openai_client.generate_response(email['body'], category)
                     
+<<<<<<< Updated upstream
                     # Store email record and update counts
+=======
+                    # Parse email date using email.utils.parsedate_to_datetime
+                    received_at = parsedate_to_datetime(email['date'])
+                    
+                    # Store email record
+>>>>>>> Stashed changes
                     email_data = {
                         'id': email['id'],
                         'subject': email['subject'],
                         'sender': email['sender'],
                         'category': category,
-                        'received_at': datetime.strptime(email['date'], '%a, %d %b %Y %H:%M:%S %z'),
+                        'received_at': received_at,
                         'response': response
                     }
                     self.excel_client.add_email_record(candidate['Id'], email_data)
