@@ -399,7 +399,7 @@ class GmailClient:
     
     def create_draft(self, to: str, subject: str, body: str) -> None:
         """
-        Create a draft email.
+        Create a draft email without sending it.
         
         Args:
             to (str): Recipient email address
@@ -407,28 +407,31 @@ class GmailClient:
             body (str): Email body content
             
         Note:
-            - Creates a properly formatted email
-            - Uses SMTP to create the draft
-            - Handles connection cleanup
+            - Creates a draft email in Gmail
+            - Does not send the email
+            - Uses IMAP to create the draft
         """
         try:
             # Create message
             message = MIMEMultipart()
             message['to'] = to
             message['subject'] = subject
+            message['from'] = self.email
             
             # Add body
             message.attach(MIMEText(body, 'plain'))
             
-            # Connect to SMTP server
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
-            server.login(self.email, self.password)
+            # Connect to IMAP server
+            mail = imaplib.IMAP4_SSL(self.imap_server)
+            mail.login(self.email, self.password)
             
-            # Create draft
-            server.sendmail(self.email, to, message.as_string())
+            # Select the Drafts folder
+            mail.select('[Gmail]/Drafts')
             
-            server.quit()
+            # Append the message to Drafts
+            mail.append('[Gmail]/Drafts', '', imaplib.Time2Internaldate(datetime.now()), str(message).encode())
+            
+            mail.logout()
             logger.info(f"Successfully created draft email to {to}")
         
         except Exception as e:
