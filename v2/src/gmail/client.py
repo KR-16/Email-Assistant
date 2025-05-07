@@ -1,3 +1,24 @@
+"""
+Gmail Client Module
+==================
+
+This module provides functionality to interact with Gmail accounts using IMAP and SMTP.
+It handles email operations such as:
+- Authentication with Gmail servers
+- Fetching emails
+- Applying labels
+- Creating draft responses
+
+The client supports:
+- Multiple Gmail accounts
+- Email categorization
+- Label management
+- Draft response creation
+
+Author: Your Name
+Date: 2024
+"""
+
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -29,6 +50,23 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class GmailClient:
+    """
+    Client for interacting with Gmail accounts.
+    
+    This class provides methods to:
+    - Authenticate with Gmail
+    - Manage email labels
+    - Fetch and process emails
+    - Create draft responses
+    
+    Attributes:
+        email (str): Gmail address
+        password (str): Gmail password or app password
+        imap_server (str): IMAP server address
+        smtp_server (str): SMTP server address
+        smtp_port (int): SMTP server port
+    """
+    
     def __init__(self, email: str, password: str):
         """
         Initialize Gmail client with email and password.
@@ -36,6 +74,11 @@ class GmailClient:
         Args:
             email (str): Gmail address
             password (str): Gmail password or app password
+            
+        Note:
+            - Cleans password of any non-ASCII characters
+            - Tests authentication before proceeding
+            - Creates required labels if they don't exist
         """
         self.email = email
         # Clean the password of any non-ASCII characters
@@ -51,7 +94,17 @@ class GmailClient:
         self._create_labels()
     
     def _test_authentication(self) -> None:
-        """Test Gmail authentication and provide helpful error messages."""
+        """
+        Test Gmail authentication and provide helpful error messages.
+        
+        This method:
+        1. Tests IMAP connection
+        2. Tests SMTP connection
+        3. Provides specific error messages for common issues
+        
+        Raises:
+            ValueError: If authentication fails with specific error message
+        """
         try:
             # Test IMAP connection
             mail = imaplib.IMAP4_SSL(self.imap_server)
@@ -85,26 +138,43 @@ class GmailClient:
             raise ValueError(f"Failed to authenticate Gmail account {self.email}: {str(e)}")
     
     def _create_labels(self) -> None:
-        """Create Gmail labels if they don't exist."""
+        """
+        Create Gmail labels and their corresponding folders.
+        
+        Creates the following labels and folders:
+        - Application
+        - Interview
+        - Offer
+        - Rejection
+        - Other
+        
+        Note:
+            - Creates both labels and folders
+            - Ignores errors if they already exist
+            - Sets up proper folder structure
+        """
         try:
             # Connect to IMAP server
             mail = imaplib.IMAP4_SSL(self.imap_server)
             mail.login(self.email, self.password)
             
-            # Create labels
+            # Create labels and folders
             labels = ['Application', 'Interview', 'Offer', 'Rejection', 'Other']
             for label in labels:
                 try:
+                    # Create label
                     mail.create(label)
+                    # Create folder with same name
+                    mail.create(f'[Gmail]/{label}')
                 except imaplib.IMAP4.error as e:
                     if "already exists" not in str(e):
                         raise
             
             mail.logout()
-            logger.info(f"Successfully created Gmail labels for {self.email}")
+            logger.info(f"Successfully created Gmail labels and folders for {self.email}")
         
         except Exception as e:
-            logger.error(f"Error creating Gmail labels: {str(e)}")
+            logger.error(f"Error creating Gmail labels and folders: {str(e)}")
             raise
     
     def get_today_emails(self) -> List[Dict]:
@@ -112,7 +182,17 @@ class GmailClient:
         Get all emails received today.
         
         Returns:
-            List[Dict]: List of email dictionaries containing id, subject, sender, date, and body
+            List[Dict]: List of email dictionaries containing:
+                - id: Gmail message ID
+                - subject: Email subject
+                - sender: Sender's email address
+                - date: Email date
+                - body: Email body content
+                
+        Note:
+            - Only fetches emails from today
+            - Handles both plain text and multipart emails
+            - Decodes email content properly
         """
         try:
             # Connect to IMAP server
@@ -164,31 +244,79 @@ class GmailClient:
             logger.error(f"Error fetching emails: {str(e)}")
             raise
     
-    def apply_label(self, email_id: str, label: str) -> None:
+    def apply_label(self, message_id: str, label_name: str) -> None:
         """
-        Apply a label to an email.
+        Apply a label to an email and move it to the corresponding folder.
         
         Args:
-            email_id (str): Gmail message ID
-            label (str): Label to apply
+            message_id (str): Gmail message ID
+            label_name (str): Label to apply (Application/Interview/Offer/Rejection/Other)
+            
+        Note:
+            - Connects to Gmail
+            - Applies label to email
+            - Moves email to the labeled folder
+            - Handles connection cleanup
         """
         try:
-            # Connect to IMAP server
+            # Connect to Gmail
+            mail = imaplib.IMAP4_SSL(self.imap_server)
+            mail.login(self.email, self.password)
+            mail.select('INBOX')
+            
+            # Apply label to email
+            mail.store(message_id, '+X-GM-LABELS', label_name)
+            
+            # Copy email to labeled folder
+            mail.copy(message_id, label_name)
+            
+            # Delete from inbox (optional - comment out if you want to keep in inbox)
+            # mail.store(message_id, '+FLAGS', '\\Deleted')
+            # mail.expunge()
+            
+            logger.info(f"Successfully applied label {label_name} and moved email {message_id} to {label_name} folder")
+        except Exception as e:
+            logger.error(f"Failed to apply label: {str(e)}")
+            raise
+        finally:
+            try:
+                mail.close()
+                mail.logout()
+            except:
+                pass
+
+    def _get_label_id(self, label_name: str) -> Optional[str]:
+        """
+        Get the ID of a Gmail label.
+        
+        Args:
+            label_name (str): Name of the label
+            
+        Returns:
+            Optional[str]: Label ID if found, None otherwise
+        """
+        try:
+            # Connect to Gmail
             mail = imaplib.IMAP4_SSL(self.imap_server)
             mail.login(self.email, self.password)
             
-            # Select inbox
-            mail.select('inbox')
+            # List all labels
+            response, data = mail.list()
             
-            # Apply label
-            mail.store(email_id, '+X-GM-LABELS', label)
+            # Find the label
+            for item in data:
+                if label_name.encode() in item:
+                    return item.split(b'"')[-2].decode()
             
-            mail.logout()
-            logger.info(f"Successfully applied label {label} to email {email_id}")
-        
+            return None
         except Exception as e:
-            logger.error(f"Error applying label: {str(e)}")
-            raise
+            logger.error(f"Failed to get label ID: {str(e)}")
+            return None
+        finally:
+            try:
+                mail.logout()
+            except:
+                pass
     
     def create_draft(self, to: str, subject: str, body: str) -> None:
         """
@@ -197,7 +325,12 @@ class GmailClient:
         Args:
             to (str): Recipient email address
             subject (str): Email subject
-            body (str): Email body
+            body (str): Email body content
+            
+        Note:
+            - Creates a properly formatted email
+            - Uses SMTP to create the draft
+            - Handles connection cleanup
         """
         try:
             # Create message

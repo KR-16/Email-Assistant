@@ -1,3 +1,23 @@
+"""
+Excel Client Module
+==================
+
+This module provides functionality to interact with Excel files for data storage and retrieval.
+It manages three main sheets:
+1. Candidates: Stores candidate information
+2. EmailRecords: Tracks email processing history
+3. LabelCounts: Maintains counts of email categories
+
+The client handles:
+- Reading and writing Excel data
+- Managing multiple sheets
+- Tracking email records
+- Counting email categories
+
+Author: Your Name
+Date: 2024
+"""
+
 import pandas as pd
 import logging
 from typing import List, Dict, Optional
@@ -12,12 +32,33 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class ExcelClient:
+    """
+    Client for interacting with Excel files.
+    
+    This class provides methods to:
+    - Load and save Excel data
+    - Manage candidate information
+    - Track email records
+    - Count email categories
+    
+    Attributes:
+        excel_file_path (str): Path to the Excel file
+        candidates_df (pd.DataFrame): DataFrame for candidate data
+        email_records_df (pd.DataFrame): DataFrame for email records
+        label_counts_df (pd.DataFrame): DataFrame for label counts
+    """
+    
     def __init__(self, excel_file_path: str):
         """
         Initialize Excel client.
         
         Args:
             excel_file_path (str): Path to the Excel file containing candidate data
+            
+        Note:
+            - Creates Excel file if it doesn't exist
+            - Loads data from all sheets
+            - Initializes DataFrames
         """
         self.excel_file_path = excel_file_path
         self.candidates_df = None
@@ -26,16 +67,40 @@ class ExcelClient:
         self.load_data()
 
     def load_data(self) -> None:
-        """Load data from Excel file."""
+        """
+        Load data from Excel file.
+        
+        This method:
+        1. Creates Excel file if it doesn't exist
+        2. Loads candidate data from Candidates sheet
+        3. Loads or initializes Results sheet for label counts
+        
+        Note:
+            - Reads candidates from Candidates sheet
+            - Maintains label counts in Results sheet
+            - Handles file creation and loading
+        """
         try:
-            # Create Excel file with multiple sheets if it doesn't exist
+            # Create Excel file if it doesn't exist
             if not os.path.exists(self.excel_file_path):
                 self._create_excel_file()
             
-            # Load data from Excel sheets
-            self.candidates_df = pd.read_excel(self.excel_file_path, sheet_name=0)
-            self.email_records_df = pd.read_excel(self.excel_file_path, sheet_name=0)
-            self.label_counts_df = pd.read_excel(self.excel_file_path, sheet_name=0)
+            # Load candidate data from Candidates sheet
+            self.candidates_df = pd.read_excel(self.excel_file_path, sheet_name='Candidates')
+            
+            # Remove rows with NaN values in required columns
+            required_cols = ['Name', 'candidateEmail__c', 'candidatePassword__c']
+            self.candidates_df = self.candidates_df.dropna(subset=required_cols)
+            
+            # Initialize Results sheet for label counts
+            try:
+                self.label_counts_df = pd.read_excel(self.excel_file_path, sheet_name='Results')
+            except:
+                self.label_counts_df = pd.DataFrame(columns=[
+                    'CandidateId', 'CandidateName', 'CandidateEmail',
+                    'Application', 'Interview', 'Offer', 'Rejection', 'Other',
+                    'LastUpdated'
+                ])
             
             logger.info(f"Successfully loaded data from {self.excel_file_path}")
         except Exception as e:
@@ -43,35 +108,60 @@ class ExcelClient:
             raise
 
     def _create_excel_file(self) -> None:
-        """Create new Excel file with required sheets and columns."""
-        # Create DataFrames with required columns
+        """
+        Create new Excel file with required sheets.
+        
+        Creates two sheets:
+        1. Candidates:
+           - Name
+           - candidateEmail__c
+           - candidatePassword__c
+           
+        2. Results:
+           - CandidateId
+           - CandidateName
+           - CandidateEmail
+           - Application
+           - Interview
+           - Offer
+           - Rejection
+           - Other
+           - LastUpdated
+        """
+        # Create DataFrames for each sheet
         candidates_df = pd.DataFrame(columns=[
             'Name', 'candidateEmail__c', 'candidatePassword__c'
         ])
-        email_records_df = pd.DataFrame(columns=[
-            'Id', 'CandidateId', 'GmailMessageId', 'Subject', 'Sender',
-            'Category', 'ReceivedAt', 'ProcessedAt', 'ResponseGenerated',
-            'ResponseSent'
-        ])
-        label_counts_df = pd.DataFrame(columns=[
-            'Id', 'CandidateId', 'CandidateName', 'CandidateEmail',
+        
+        results_df = pd.DataFrame(columns=[
+            'CandidateId', 'CandidateName', 'CandidateEmail',
             'Application', 'Interview', 'Offer', 'Rejection', 'Other',
             'LastUpdated'
         ])
 
-        # Create Excel writer
+        # Create Excel file with both sheets
         with pd.ExcelWriter(self.excel_file_path, engine='openpyxl') as writer:
             candidates_df.to_excel(writer, sheet_name='Candidates', index=False)
-            email_records_df.to_excel(writer, sheet_name='EmailRecords', index=False)
-            label_counts_df.to_excel(writer, sheet_name='LabelCounts', index=False)
+            results_df.to_excel(writer, sheet_name='Results', index=False)
 
     def save_data(self) -> None:
-        """Save all data to Excel file."""
+        """
+        Save data to Excel file.
+        
+        This method:
+        1. Saves candidate data to Candidates sheet
+        2. Saves label counts to Results sheet
+        
+        Note:
+            - Maintains separate sheets
+            - Preserves existing data
+            - Updates all changes
+        """
         try:
             with pd.ExcelWriter(self.excel_file_path, engine='openpyxl') as writer:
                 self.candidates_df.to_excel(writer, sheet_name='Candidates', index=False)
-                self.email_records_df.to_excel(writer, sheet_name='EmailRecords', index=False)
-                self.label_counts_df.to_excel(writer, sheet_name='LabelCounts', index=False)
+                self.label_counts_df.to_excel(writer, sheet_name='Results', index=False)
+            
             logger.info(f"Successfully saved data to {self.excel_file_path}")
         except Exception as e:
             logger.error(f"Failed to save Excel file: {str(e)}")
@@ -85,7 +175,16 @@ class ExcelClient:
             limit (int): Maximum number of candidates to fetch
             
         Returns:
-            List[Dict]: List of candidate records with email and password
+            List[Dict]: List of candidate records with:
+                - Id: Generated ID
+                - Name: Candidate name
+                - Email: Candidate email
+                - Password: candidatePassword__c
+                
+        Note:
+            - Validates required columns
+            - Maps column names
+            - Generates IDs
         """
         try:
             # Ensure required columns exist
@@ -119,6 +218,11 @@ class ExcelClient:
             
         Returns:
             Optional[Dict]: Candidate record if found, None otherwise
+            
+        Note:
+            - Searches by email address
+            - Maps column names
+            - Generates ID
         """
         try:
             candidate = self.candidates_df[self.candidates_df['candidateEmail__c'] == email]
@@ -151,38 +255,29 @@ class ExcelClient:
 
     def add_email_record(self, candidate_id: str, email_data: Dict) -> None:
         """
-        Add a new email record.
+        Add a new email record and update label count.
         
         Args:
             candidate_id (str): Candidate ID
-            email_data (Dict): Email data including message ID, subject, etc.
+            email_data (Dict): Email data including:
+                - id: Gmail message ID
+                - subject: Email subject
+                - sender: Sender's email
+                - category: Email category
+                - received_at: Reception time
+                - response: Generated response
+                
+        Note:
+            - Updates label counts
+            - Saves changes
         """
         try:
-            new_record = {
-                'Id': len(self.email_records_df) + 1,
-                'CandidateId': candidate_id,
-                'GmailMessageId': email_data['id'],
-                'Subject': email_data['subject'],
-                'Sender': email_data['sender'],
-                'Category': email_data['category'],
-                'ReceivedAt': email_data['received_at'],
-                'ProcessedAt': datetime.utcnow(),
-                'ResponseGenerated': email_data.get('response'),
-                'ResponseSent': bool(email_data.get('response'))
-            }
-            
-            self.email_records_df = pd.concat([
-                self.email_records_df,
-                pd.DataFrame([new_record])
-            ], ignore_index=True)
-            
             # Update label counts
             self._update_label_count(candidate_id, email_data['category'])
             
-            self.save_data()
-            logger.info(f"Successfully added email record for candidate {candidate_id}")
+            logger.info(f"Successfully processed email for candidate {candidate_id}")
         except Exception as e:
-            logger.error(f"Failed to add email record: {str(e)}")
+            logger.error(f"Failed to process email: {str(e)}")
             raise
 
     def _update_label_count(self, candidate_id: str, category: str) -> None:
@@ -192,6 +287,11 @@ class ExcelClient:
         Args:
             candidate_id (str): Candidate ID
             category (str): Email category/label
+            
+        Note:
+            - Updates existing count or creates new record
+            - Tracks all label types
+            - Updates timestamp
         """
         try:
             # Get candidate info
@@ -207,7 +307,6 @@ class ExcelClient:
             else:
                 # Create new record
                 new_count = {
-                    'Id': len(self.label_counts_df) + 1,
                     'CandidateId': candidate_id,
                     'CandidateName': candidate['Name'],
                     'CandidateEmail': candidate['candidateEmail__c'],
@@ -225,6 +324,8 @@ class ExcelClient:
                     pd.DataFrame([new_count])
                 ], ignore_index=True)
             
+            # Save changes
+            self.save_data()
             logger.info(f"Successfully updated label count for candidate {candidate_id}")
         except Exception as e:
             logger.error(f"Failed to update label count: {str(e)}")

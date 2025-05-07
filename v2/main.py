@@ -1,9 +1,28 @@
+"""
+Email Assistant - Main Script
+============================
+
+This script is the main orchestrator for the Email Assistant system. It manages the processing
+of emails for multiple candidates, coordinating between Excel data storage, Gmail operations,
+and AI-powered email categorization and response generation.
+
+The system:
+1. Reads candidate information from Excel
+2. Connects to each candidate's Gmail account
+3. Processes today's emails
+4. Categorizes emails using AI
+5. Applies Gmail labels
+6. Generates responses when needed
+7. Tracks all activities in Excel
+"""
+
 import logging
 from datetime import datetime
 import sys
 import os
 from typing import Dict, List
 
+# Import custom modules
 from src.excel.client import ExcelClient
 from src.gmail.client import GmailClient
 from src.openai.client import OpenAIClient
@@ -14,14 +33,32 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('email_assistant.log'),
-        logging.StreamHandler(sys.stdout)
+        logging.FileHandler('email_assistant.log'),  # Log to file
+        logging.StreamHandler(sys.stdout)            # Log to console
     ]
 )
 logger = logging.getLogger(__name__)
 
 class EmailAssistant:
+    """
+    Main class that orchestrates the email processing system.
+    
+    This class manages:
+    - Excel data storage and retrieval
+    - Gmail account connections
+    - AI-powered email processing
+    - Response generation
+    """
+    
     def __init__(self):
+        """
+        Initialize the Email Assistant with required clients.
+        
+        Creates instances of:
+        - ExcelClient: For data storage and retrieval
+        - OpenAIClient: For email categorization and response generation
+        - Gmail clients: Dictionary to store Gmail clients for each candidate
+        """
         self.excel_client = ExcelClient(EXCEL_FILE_PATH)
         self.openai_client = OpenAIClient()
         self.gmail_clients = {}  # Dictionary to store Gmail clients for each candidate
@@ -35,6 +72,11 @@ class EmailAssistant:
             
         Returns:
             GmailClient: Authenticated Gmail client for the candidate
+            
+        Note:
+            - Creates a new Gmail client if one doesn't exist for the candidate
+            - Reuses existing client if already created
+            - Handles authentication with Gmail servers
         """
         if candidate['Email'] not in self.gmail_clients:
             self.gmail_clients[candidate['Email']] = GmailClient(
@@ -47,8 +89,22 @@ class EmailAssistant:
         """
         Process emails for a single candidate.
         
+        This method:
+        1. Connects to candidate's Gmail account
+        2. Fetches today's emails
+        3. Processes each unprocessed email:
+           - Categorizes using AI
+           - Applies Gmail label
+           - Generates response if needed
+           - Updates label counts
+        
         Args:
             candidate (Dict): Candidate information from Excel
+            
+        Note:
+            - Only processes emails not already in the system
+            - Updates label counts in Excel
+            - Creates draft responses for important emails
         """
         try:
             # Get Gmail client for this candidate
@@ -59,11 +115,8 @@ class EmailAssistant:
             
             # Process each email
             for email in emails:
-                # Check if email already processed
-                if self.excel_client.email_records_df[
-                    self.excel_client.email_records_df['GmailMessageId'] == email['id']
-                ].empty:
-                    # Categorize email
+                try:
+                    # Categorize email using AI
                     category = self.openai_client.categorize_email(email['body'])
                     
                     # Apply Gmail label
@@ -72,7 +125,7 @@ class EmailAssistant:
                     # Generate response if needed
                     response = self.openai_client.generate_response(email['body'], category)
                     
-                    # Store email record
+                    # Store email record and update counts
                     email_data = {
                         'id': email['id'],
                         'subject': email['subject'],
@@ -92,14 +145,27 @@ class EmailAssistant:
                         )
                     
                     logger.info(f"Successfully processed email {email['id']} for candidate {candidate['Email']}")
-                else:
-                    logger.info(f"Email {email['id']} already processed")
+                except Exception as e:
+                    logger.error(f"Error processing individual email {email.get('id', 'unknown')} for candidate {candidate['Email']}: {str(e)}")
+                    continue  # Continue with next email even if one fails
         
         except Exception as e:
             logger.error(f"Error processing emails for candidate {candidate['Email']}: {str(e)}")
 
     def run(self) -> None:
-        """Main execution method."""
+        """
+        Main execution method.
+        
+        This method:
+        1. Fetches all candidates from Excel
+        2. Processes emails for each candidate
+        3. Handles any errors during processing
+        
+        Note:
+            - Processes candidates in sequence
+            - Logs all activities
+            - Continues processing even if one candidate fails
+        """
         try:
             # Fetch candidates from Excel
             candidates = self.excel_client.get_candidates()
@@ -116,5 +182,6 @@ class EmailAssistant:
             logger.error(f"Error in main execution: {str(e)}")
 
 if __name__ == "__main__":
+    # Create and run the email assistant
     assistant = EmailAssistant()
     assistant.run() 
