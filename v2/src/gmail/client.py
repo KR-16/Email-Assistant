@@ -5,7 +5,7 @@ Gmail Client Module
 This module provides functionality to interact with Gmail accounts using IMAP and SMTP.
 It handles email operations such as:
 - Authentication with Gmail servers
-- Fetching emails
+- Fetching emails for different time ranges
 - Applying labels
 - Creating draft responses
 
@@ -14,6 +14,7 @@ The client supports:
 - Email categorization
 - Label management
 - Draft response creation
+- Date-based email filtering
 
 Author: Your Name
 Date: 2024

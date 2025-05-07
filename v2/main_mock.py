@@ -1,3 +1,23 @@
+"""
+Email Assistant Mock Application
+==============================
+
+This module provides a mock implementation of the email assistant that processes
+emails for job candidates without using the actual OpenAI API. It's designed for
+testing and development purposes.
+
+The application:
+1. Reads candidate information from an Excel file
+2. Connects to each candidate's Gmail account
+3. Processes emails based on specified time range
+4. Categorizes emails using keyword matching
+5. Generates response drafts
+6. Records all actions in Excel
+
+Author: Your Name
+Date: 2024
+"""
+
 import logging
 import sys
 import os
@@ -28,6 +48,19 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class MockEmailAssistant:
+    """
+    Mock implementation of the email assistant.
+    
+    This class provides functionality to process emails for job candidates
+    using mock AI components instead of the actual OpenAI API. It's designed
+    for testing and development purposes.
+    
+    Attributes:
+        excel_client (ExcelClient): Client for Excel operations
+        ai_client (MockOpenAIClient): Mock AI client for categorization and response generation
+        gmail_clients (Dict): Cache of Gmail clients for each candidate
+    """
+    
     def __init__(self):
         """Initialize the email assistant with mock components."""
         self.excel_client = ExcelClient(EXCEL_FILE_PATH)
@@ -39,11 +72,17 @@ class MockEmailAssistant:
         """
         Get or create a Gmail client for a candidate.
         
+        This method implements a caching mechanism to avoid creating multiple
+        Gmail clients for the same candidate.
+        
         Args:
             candidate (Dict): Candidate information including email and password
             
         Returns:
             GmailClient: Authenticated Gmail client for the candidate
+            
+        Raises:
+            Exception: If Gmail client creation fails
         """
         email = candidate['Email']
         if email not in self.gmail_clients:
@@ -62,9 +101,23 @@ class MockEmailAssistant:
         """
         Process emails for a single candidate.
         
+        This method:
+        1. Gets or creates a Gmail client for the candidate
+        2. Fetches emails for the specified time range
+        3. Processes each unprocessed email:
+           - Categorizes it using the mock AI client
+           - Applies appropriate Gmail label
+           - Generates a response draft
+           - Records the action in Excel
+        
         Args:
             candidate (Dict): Candidate information from Excel
             time_range (str): Time range to process emails for ('today', 'yesterday', or 'last_week')
+            
+        Note:
+            - Only processes emails that haven't been processed before
+            - Creates response drafts without sending them
+            - Handles errors for individual emails without stopping the entire process
         """
         try:
             # Get Gmail client
@@ -139,8 +192,18 @@ class MockEmailAssistant:
         """
         Main execution method.
         
+        This method:
+        1. Fetches all candidates from Excel
+        2. Processes emails for each candidate
+        3. Handles errors for individual candidates without stopping the entire process
+        
         Args:
             time_range (str): Time range to process emails for ('today', 'yesterday', or 'last_week')
+            
+        Note:
+            - Continues processing even if one candidate fails
+            - Logs all actions and errors
+            - Saves all records to Excel
         """
         try:
             # Get candidates
@@ -163,13 +226,22 @@ class MockEmailAssistant:
             raise
 
 def main():
-    """Entry point for the application."""
+    """
+    Entry point for the application.
+    
+    This function:
+    1. Creates an instance of MockEmailAssistant
+    2. Runs the email processing
+    3. Handles any fatal errors
+    
+    Note:
+        - Exits with status code 1 if a fatal error occurs
+        - Logs all actions and errors
+    """
     try:
         assistant = MockEmailAssistant()
         # You can change the time_range parameter to 'today', 'yesterday', or 'last_week'
-        # assistant.run(time_range='today')
         assistant.run(time_range='yesterday')
-        # assistant.run(time_range='last_week')
     except Exception as e:
         logger.error(f"Fatal error: {str(e)}")
         sys.exit(1)
