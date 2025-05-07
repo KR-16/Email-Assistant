@@ -126,14 +126,11 @@ class EmailAssistant:
                     # Generate response if needed
                     response = self.openai_client.generate_response(email['body'], category)
                     
-<<<<<<< Updated upstream
                     # Store email record and update counts
-=======
                     # Parse email date using email.utils.parsedate_to_datetime
                     received_at = parsedate_to_datetime(email['date'])
                     
                     # Store email record
->>>>>>> Stashed changes
                     email_data = {
                         'id': email['id'],
                         'subject': email['subject'],

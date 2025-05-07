@@ -158,18 +158,6 @@ class GmailClient:
             mail = imaplib.IMAP4_SSL(self.imap_server)
             mail.login(self.email, self.password)
             
-<<<<<<< Updated upstream
-            # Create labels and folders
-            labels = ['Application', 'Interview', 'Offer', 'Rejection', 'Other']
-            for label in labels:
-                try:
-                    # Create label
-                    mail.create(label)
-                    # Create folder with same name
-                    mail.create(f'[Gmail]/{label}')
-                except imaplib.IMAP4.error as e:
-                    if "already exists" not in str(e):
-=======
             # Get existing labels
             _, labels_response = mail.list()
             existing_labels = []
@@ -193,23 +181,15 @@ class GmailClient:
                         logger.info(f"Created new label: {label}")
                     except imaplib.IMAP4.error as e:
                         logger.error(f"Error creating label {label}: {str(e)}")
->>>>>>> Stashed changes
                         raise
                 else:
                     logger.info(f"Label already exists: {label}")
             
             mail.logout()
-<<<<<<< Updated upstream
-            logger.info(f"Successfully created Gmail labels and folders for {self.email}")
-        
-        except Exception as e:
-            logger.error(f"Error creating Gmail labels and folders: {str(e)}")
-=======
             logger.info(f"Successfully verified Gmail labels for {self.email}")
         
         except Exception as e:
             logger.error(f"Error managing Gmail labels: {str(e)}")
->>>>>>> Stashed changes
             raise
     
     def _get_emails_by_date_range(self, start_date: datetime, end_date: datetime) -> List[Dict]:
